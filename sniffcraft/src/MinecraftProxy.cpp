@@ -331,6 +331,13 @@ void MinecraftProxy::Handle(ClientboundLoginCompressionPacket& packet)
     compression_threshold = packet.GetCompressionThreshold();
 }
 
+#if PROTOCOL_VERSION < 107 /* < 1.9 */
+void MinecraftProxy::Handle(ProtocolCraft::ClientboundPlayCompressionPacket& packet)
+{
+    compression_threshold = packet.GetThreshold();
+}
+#endif
+
 void MinecraftProxy::Handle(ClientboundHelloPacket& packet)
 {
 #ifdef USE_ENCRYPTION

@@ -52,6 +52,9 @@ private:
     virtual void Handle(ProtocolCraft::ClientboundGameProfilePacket& packet) override;
 #endif
     virtual void Handle(ProtocolCraft::ClientboundLoginCompressionPacket& packet) override;
+#if PROTOCOL_VERSION < 107 /* < 1.9 */
+    virtual void Handle(ProtocolCraft::ClientboundPlayCompressionPacket& packet) override;
+#endif
     virtual void Handle(ProtocolCraft::ClientboundHelloPacket& packet) override;
 #if USE_ENCRYPTION && PROTOCOL_VERSION > 760 /* > 1.19.1/2 */
     virtual void Handle(ProtocolCraft::ClientboundLoginPacket& packet) override;
