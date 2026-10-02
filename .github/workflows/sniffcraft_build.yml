@@ -17,6 +17,16 @@ on:
         required: false
         default: ""
         type: string
+      headless:
+        description: Build without GUI (used for the Wireshark extcap builds of other versions)
+        required: false
+        default: false
+        type: boolean
+      artifact_suffix:
+        description: Appended to the artifact name, to build several versions in the same workflow
+        required: false
+        default: ""
+        type: string
 
 env:
   BUILD_TYPE: Release
@@ -56,12 +66,13 @@ jobs:
           -DSNIFFCRAFT_WITH_ENCRYPTION=ON
           -DSNIFFCRAFT_FORCE_LOCAL_ZLIB=ON
           -DSNIFFCRAFT_FORCE_LOCAL_OPENSSL=ON
-          -DSNIFFCRAFT_WITH_GUI=ON
+          -DSNIFFCRAFT_WITH_GUI=${{ inputs.headless && 'OFF' || 'ON' }}
+          -DSNIFFCRAFT_DETAILED_PARSING=ON
           -S $GITHUB_WORKSPACE
           -B .
 
       - name: Upload version artifact
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && inputs.artifact_suffix == ''
         uses: actions/upload-artifact@v7
         with:
           name: MC-version
@@ -89,6 +100,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: sniffcraft-${{ runner.os }}
+          name: sniffcraft-${{ runner.os }}${{ inputs.artifact_suffix }}
           path: ${{ github.workspace }}/bin/sniffcraft*
           retention-days: 1

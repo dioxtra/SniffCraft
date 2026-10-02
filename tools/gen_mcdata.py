@@ -18,13 +18,14 @@ Usage:
 import argparse
 import json
 import pathlib
+import re
 import urllib.request
 
 # minecraft-data commit the definitions are generated from
 DEFAULT_REF = "f5d7d74604d8c6153fd086bfe035e0630a5207cc"
 RAW_URL = "https://raw.githubusercontent.com/PrismarineJS/minecraft-data/{ref}/data/{path}"
-# 1.20.2, first version with the configuration state
-DEFAULT_MIN_PROTOCOL = 764
+# 1.8, oldest version supported by SniffCraft
+DEFAULT_MIN_PROTOCOL = 47
 
 
 def load_json(source, ref, path):
@@ -81,7 +82,8 @@ def main():
     # protocolVersions.json is sorted newest first, keep the newest release for each protocol number
     protocols = {}
     for entry in protocol_versions:
-        if entry.get("releaseType") != "release" or entry["version"] < args.min_protocol:
+        # Skip snapshots, pre-releases and release candidates
+        if not re.fullmatch(r"\d+\.\d+(\.\d+)?", entry["minecraftVersion"]) or entry["version"] < args.min_protocol:
             continue
         data_path = data_paths.get(entry["minecraftVersion"], {}).get("protocol")
         if data_path is not None and entry["version"] not in protocols:

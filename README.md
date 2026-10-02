@@ -113,15 +113,21 @@ The current player will **not** appear on this capture, as the replay mod artifi
 
 SniffCraft can stream the packets it sees to [Wireshark](https://www.wireshark.org/) (4.3 or newer), where they can be filtered, searched and inspected byte by byte like any other protocol. Two Lua dissectors are provided in the [wireshark](wireshark/) folder:
 - ``sniffcraft.lua`` displays the packets captured by SniffCraft: names, states, every field parsed by protocolCraft (with the matching bytes highlighted when SniffCraft was built with the GUI option) and, optionally, the full json of each packet. Packets protocolCraft fails to parse are kept with their raw bytes.
-- ``minecraft.lua`` is an independent parser based on the [minecraft-data](https://github.com/PrismarineJS/minecraft-data) protocol definitions (1.20.2+). It decodes raw Minecraft TCP traffic on ports 25565 and 25555 (configurable in the protocol preferences), which works for offline-mode servers and for the client <-> SniffCraft side of a session, but not for encrypted online-mode traffic. When both scripts are installed, each SniffCraft packet is also shown as parsed by this second implementation, which is a convenient way to spot parsing errors.
+- ``minecraft.lua`` is an independent parser based on the [minecraft-data](https://github.com/PrismarineJS/minecraft-data) protocol definitions (1.8+). It decodes raw Minecraft TCP traffic on ports 25565 and 25555 (configurable in the protocol preferences), which works for offline-mode servers and for the client <-> SniffCraft side of a session, but not for encrypted online-mode traffic. When both scripts are installed, each SniffCraft packet is also shown as parsed by this second implementation, which is a convenient way to spot parsing errors.
 
 ### Install
 
-On Windows, run ``powershell -ExecutionPolicy Bypass -File wireshark\install.ps1 -SniffcraftExe path\to\sniffcraft.exe``. It copies SniffCraft to your personal extcap folder and the dissectors to your personal Lua plugins folder. On other platforms, copy them manually (the folders are listed in Wireshark ``Help > About Wireshark > Folders``): the SniffCraft executable goes in ``Personal Extcap path``, ``sniffcraft.lua``, ``minecraft.lua`` and the ``minecraft_mcdata`` folder go in ``Personal Lua Plugins``.
+The easiest way is to download ``sniffcraft-wireshark-windows.zip`` or ``sniffcraft-wireshark-linux.zip`` from the [latest release](../../releases/tag/latest). They contain SniffCraft for many Minecraft versions (from 1.8.9 to the latest one) and the dissectors.
+
+On Windows, extract it and run ``powershell -ExecutionPolicy Bypass -File install.ps1``. It copies SniffCraft to your personal extcap folder and the dissectors to your personal Lua plugins folder. On other platforms, copy the files manually (the folders are listed in Wireshark ``Help > About Wireshark > Folders``): ``sniffcraft`` and the ``sniffcraft_versions`` folder go in ``Personal Extcap path``, ``sniffcraft.lua``, ``minecraft.lua`` and the ``minecraft_mcdata`` folder go in ``Personal Lua Plugins``.
+
+When building from source, ``python tools/build_versions.py`` builds SniffCraft for all these versions in ``dist/sniffcraft_versions`` (or only the versions given as arguments), and ``wireshark\install.ps1`` installs them along with ``bin\sniffcraft.exe``.
 
 ### Live capture
 
-After restarting Wireshark, a ``SniffCraft Minecraft proxy`` interface shows up in the interface list. Click on its gear icon to set the server address and the local port (default 25555), then start the capture and connect your client to ``127.0.0.1:<local port>``. Stopping the capture stops the proxy.
+After restarting Wireshark, a ``SniffCraft Minecraft proxy`` interface shows up in the interface list. Click on its gear icon to choose the Minecraft version of your client and to set the server address and the local port (default 25555), then start the capture and connect your client to ``127.0.0.1:<local port>``. Stopping the capture stops the proxy.
+
+The version list contains the version of the SniffCraft executable in the extcap folder, plus every ``sniffcraft-<version>`` build found in the ``sniffcraft_versions`` folder next to it. Each build covers all the game versions sharing its protocol (for example the 1.21.10 build also works with 1.21.9).
 
 For online-mode servers, enable the ``Online mode`` option and log in once with your Microsoft account by running ``sniffcraft --extcap-login`` from a terminal, using the copy of SniffCraft that is in the extcap folder (the credentials are cached next to it).
 

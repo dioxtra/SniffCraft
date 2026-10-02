@@ -33,11 +33,43 @@ jobs:
     with:
       os: ${{ matrix.config.os }}
 
+  list_versions:
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.list.outputs.versions }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: List the versions for the Wireshark extcap
+        id: list
+        run: echo "versions=$(python3 tools/build_versions.py --list-json)" >> $GITHUB_OUTPUT
+
+  # Headless builds for other game versions, selectable in the Wireshark extcap options
+  build_versions:
+    name: ${{ matrix.os }} ${{ matrix.version }}
+    needs: list_versions
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        version: ${{ fromJSON(needs.list_versions.outputs.versions) }}
+    uses: ./.github/workflows/sniffcraft_build.yml
+    with:
+      os: ${{ matrix.os }}
+      version: ${{ matrix.version }}
+      headless: true
+      artifact_suffix: -${{ matrix.version }}
+
 
   release:
     runs-on: ubuntu-latest
     needs:
       - build_os_matrix
+      - build_versions
+    # A failed build for an old version shouldn't block the release, the bundles just won't have it
+    if: ${{ !cancelled() && needs.build_os_matrix.result == 'success' }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -61,6 +93,18 @@ jobs:
           name: sniffcraft-macOS
           path: macos
 
+      - name: Download Windows builds for other versions
+        uses: actions/download-artifact@v8
+        with:
+          pattern: sniffcraft-Windows-*
+          path: windows-versions
+
+      - name: Download Linux builds for other versions
+        uses: actions/download-artifact@v8
+        with:
+          pattern: sniffcraft-Linux-*
+          path: linux-versions
+
       - name: Download version artifact
         uses: actions/download-artifact@v8
         with:
@@ -77,14 +121,30 @@ jobs:
             echo -en '\n' >> release_note.txt
             echo "Examples of conf files can be found [here](https://github.com/${{ github.repository }}/tree/master/conf)." >> release_note.txt
             echo -en '\n' >> release_note.txt
-            echo "Wireshark dissectors and installer are in sniffcraft-wireshark.zip, see the [Wireshark section](https://github.com/${{ github.repository }}#wireshark) of the README." >> release_note.txt
+            echo "Wireshark: sniffcraft-wireshark-windows.zip and sniffcraft-wireshark-linux.zip contain SniffCraft for many Minecraft versions and the dissectors (sniffcraft-wireshark.zip only has the dissectors), see the [Wireshark section](https://github.com/${{ github.repository }}#wireshark) of the README." >> release_note.txt
             echo -en '\n' >> release_note.txt
             echo "💡 If you need binaries for a previous version of Minecraft, you can open [an issue using this link](https://github.com/${{ github.repository }}/issues/new?assignees=&labels=version+request&template=version-request.yml&title=%5BVersion+request%5D) and it will be automagically generated for you in a few minutes." >> release_note.txt
             echo -en '\n' >> release_note.txt
             echo **Changes:** >> release_note.txt
 
       - name: Append git commits
-        run: git log latest..HEAD --oneline --no-merges >> release_note.txt
+        run: git log latest..HEAD --oneline --no-merges >> release_note.txt || git log -20 --oneline --no-merges >> release_note.txt
+
+      - name: Package Wireshark bundles
+        run: |
+          for os in windows linux; do
+            suffix=$([ $os = windows ] && echo .exe || echo "")
+            bundle=bundle-$os
+            mkdir -p $bundle/sniffcraft_versions
+            cp $os/sniffcraft$suffix $bundle/
+            for dir in $os-versions/sniffcraft-*; do
+              [ -d "$dir" ] || continue
+              cp $dir/sniffcraft$suffix $bundle/sniffcraft_versions/sniffcraft-${dir##*-}$suffix
+            done
+            cp -r wireshark/sniffcraft.lua wireshark/minecraft.lua wireshark/minecraft_mcdata wireshark/install.ps1 $bundle/
+            chmod +x $bundle/sniffcraft$suffix $bundle/sniffcraft_versions/*
+            (cd $bundle && zip -r ../sniffcraft-wireshark-$os.zip .)
+          done
 
       - name: Rename artifacts
         run: |
@@ -107,6 +167,8 @@ jobs:
           sniffcraft-windows-${{ steps.mc-version.outputs.version }}.exe
           sniffcraft-macos-${{ steps.mc-version.outputs.version }}
           sniffcraft-wireshark.zip
+          sniffcraft-wireshark-windows.zip
+          sniffcraft-wireshark-linux.zip
           --repo ${{ github.repository }}
           --latest
           -F release_note.txt
