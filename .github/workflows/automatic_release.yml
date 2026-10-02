@@ -77,6 +77,8 @@ jobs:
             echo -en '\n' >> release_note.txt
             echo "Examples of conf files can be found [here](https://github.com/${{ github.repository }}/tree/master/conf)." >> release_note.txt
             echo -en '\n' >> release_note.txt
+            echo "Wireshark dissectors and installer are in sniffcraft-wireshark.zip, see the [Wireshark section](https://github.com/${{ github.repository }}#wireshark) of the README." >> release_note.txt
+            echo -en '\n' >> release_note.txt
             echo "💡 If you need binaries for a previous version of Minecraft, you can open [an issue using this link](https://github.com/${{ github.repository }}/issues/new?assignees=&labels=version+request&template=version-request.yml&title=%5BVersion+request%5D) and it will be automagically generated for you in a few minutes." >> release_note.txt
             echo -en '\n' >> release_note.txt
             echo **Changes:** >> release_note.txt
@@ -89,9 +91,12 @@ jobs:
           mv linux/sniffcraft sniffcraft-linux-${{ steps.mc-version.outputs.version }}
           mv windows/sniffcraft.exe sniffcraft-windows-${{ steps.mc-version.outputs.version }}.exe
           mv macos/sniffcraft sniffcraft-macos-${{ steps.mc-version.outputs.version }}
+      - name: Package Wireshark dissectors
+        working-directory: wireshark
+        run: zip -r ../sniffcraft-wireshark.zip sniffcraft.lua minecraft.lua minecraft_mcdata install.ps1
 
       - name: Remove old latest release
-        run: gh release delete latest --repo ${{ github.repository }} --cleanup-tag -y
+        run: gh release delete latest --repo ${{ github.repository }} --cleanup-tag -y || true
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -101,6 +106,7 @@ jobs:
           sniffcraft-linux-${{ steps.mc-version.outputs.version }}
           sniffcraft-windows-${{ steps.mc-version.outputs.version }}.exe
           sniffcraft-macos-${{ steps.mc-version.outputs.version }}
+          sniffcraft-wireshark.zip
           --repo ${{ github.repository }}
           --latest
           -F release_note.txt

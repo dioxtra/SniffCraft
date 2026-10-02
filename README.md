@@ -36,6 +36,7 @@ It works as a man-in-the-middle: instead of connecting directly to the server, y
 - Creating a [replay mod](https://github.com/ReplayMod/ReplayMod) capture of the session is also possible, see [Replay Mod section](#replay-mod) for more details
 - No log at all is possible, in this case, SniffCraft becomes a pure proxy that you can adapt to block/modify any packet you want
 - 1.20.5+ transfer packets are now supported
+- Live capture in [Wireshark](https://www.wireshark.org/) and ``.pcapng`` export, see [Wireshark section](#wireshark)
 
 <img width="750" src="https://github.com/user-attachments/assets/49d46827-2001-4607-8b6b-b496c73f95bc" alt="Sniffcraft GUI" align="center">
 
@@ -107,6 +108,39 @@ ServerAddress should match the address of the server you want to connect to, wit
 If ``LogToReplay`` is present and set to true in the configuration file when the session starts, all packets will also be logged in a format compatible with [replay mod](https://github.com/ReplayMod/ReplayMod). When the capture stops, you'll get a ``XXXX.mcpr`` file that can be opened by the replay mod viewer inside minecraft. Note that this is a compressed format. It may take a few seconds after the connection is closed for this file to be created correctly. Make sure you don't close SniffCraft during this time.
 
 The current player will **not** appear on this capture, as the replay mod artificially adds some packets to display it.
+
+## Wireshark
+
+SniffCraft can stream the packets it sees to [Wireshark](https://www.wireshark.org/) (4.3 or newer), where they can be filtered, searched and inspected byte by byte like any other protocol. Two Lua dissectors are provided in the [wireshark](wireshark/) folder:
+- ``sniffcraft.lua`` displays the packets captured by SniffCraft: names, states, every field parsed by protocolCraft (with the matching bytes highlighted when SniffCraft was built with the GUI option) and, optionally, the full json of each packet. Packets protocolCraft fails to parse are kept with their raw bytes.
+- ``minecraft.lua`` is an independent parser based on the [minecraft-data](https://github.com/PrismarineJS/minecraft-data) protocol definitions (1.20.2+). It decodes raw Minecraft TCP traffic on ports 25565 and 25555 (configurable in the protocol preferences), which works for offline-mode servers and for the client <-> SniffCraft side of a session, but not for encrypted online-mode traffic. When both scripts are installed, each SniffCraft packet is also shown as parsed by this second implementation, which is a convenient way to spot parsing errors.
+
+### Install
+
+On Windows, run ``powershell -ExecutionPolicy Bypass -File wireshark\install.ps1 -SniffcraftExe path\to\sniffcraft.exe``. It copies SniffCraft to your personal extcap folder and the dissectors to your personal Lua plugins folder. On other platforms, copy them manually (the folders are listed in Wireshark ``Help > About Wireshark > Folders``): the SniffCraft executable goes in ``Personal Extcap path``, ``sniffcraft.lua``, ``minecraft.lua`` and the ``minecraft_mcdata`` folder go in ``Personal Lua Plugins``.
+
+### Live capture
+
+After restarting Wireshark, a ``SniffCraft Minecraft proxy`` interface shows up in the interface list. Click on its gear icon to set the server address and the local port (default 25555), then start the capture and connect your client to ``127.0.0.1:<local port>``. Stopping the capture stops the proxy.
+
+For online-mode servers, enable the ``Online mode`` option and log in once with your Microsoft account by running ``sniffcraft --extcap-login`` from a terminal, using the copy of SniffCraft that is in the extcap folder (the credentials are cached next to it).
+
+### Capture files
+
+Set ``LogToPcapng`` to true in the conf file to also save each session in a ``XXXX.pcapng`` file that can be opened in Wireshark later. ``PcapngIncludeJson`` adds the full json of each packet (bigger files, enables ``json.*`` filters) and ``PcapngRespectFilters`` applies the ignored lists of the conf file to the capture (by default every packet is saved and filtering is done in Wireshark).
+
+### Display filter examples
+
+```
+sniffcraft.name == "System Chat"
+sniffcraft.state == 3 && sniffcraft.direction == "clientbound"
+sniffcraft.field.path == "change.position[0]"
+sniffcraft.field contains "diamond"
+sniffcraft.flags.parse_error == True
+minecraft.packet_name == "map_chunk"
+```
+
+The minecraft-data definitions can be regenerated (for example after a new Minecraft release) with ``python tools/gen_mcdata.py --ref master``.
 
 ## License
 
