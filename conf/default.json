@@ -1,6 +1,7 @@
 {
     "ServerAddress": "127.0.0.1:25565",
     "LocalPort": 25555,
+    "LocalAddress": "127.0.0.1",
     "LogToTxtFile": true,
     "LogToBinFile": false,
     "LogToConsole": true,

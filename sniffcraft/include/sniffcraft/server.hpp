@@ -42,6 +42,7 @@ private:
     std::string server_ip;
     unsigned short server_port;
     unsigned short client_port;
+    std::string client_address;
 
     bool is_next_connection_transfer;
     std::string transfer_ip;

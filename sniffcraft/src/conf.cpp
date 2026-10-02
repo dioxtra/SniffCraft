@@ -14,6 +14,7 @@
 const std::string Conf::active_conf_key = "ActiveConf";
 const std::string Conf::server_address_key = "ServerAddress";
 const std::string Conf::local_port_key = "LocalPort";
+const std::string Conf::local_address_key = "LocalAddress";
 const std::string Conf::text_file_log_key = "LogToTxtFile";
 const std::string Conf::binary_file_log_key = "LogToBinFile";
 const std::string Conf::console_log_key = "LogToConsole";
@@ -68,6 +69,10 @@ ProtocolCraft::Json::Value Conf::LoadConf()
         json[server_address_key] = "127.0.0.1:25565";
     if (!json.contains(local_port_key))
         json[local_port_key] = 25555;
+    // Only this computer can connect by default: in online mode, anyone reaching
+    // the proxy would join the server with the logged in Microsoft account
+    if (!json.contains(local_address_key))
+        json[local_address_key] = "127.0.0.1";
     if (!json.contains(text_file_log_key))
         json[text_file_log_key] = true;
     if (!json.contains(binary_file_log_key))

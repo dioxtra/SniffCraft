@@ -30,6 +30,7 @@ Server::Server()
     std::shared_lock<std::shared_mutex> conf_lock(Conf::conf_mutex);
     const ProtocolCraft::Json::Value conf = Conf::LoadConf();
     client_port = conf[Conf::local_port_key].get_number<unsigned short>();
+    client_address = conf[Conf::local_address_key].get_string();
     server_address = conf[Conf::server_address_key].get_string();
     ResolveIpPortFromAddress();
 
@@ -72,9 +73,9 @@ void Server::run()
 
 void Server::run_iocontext()
 {
-    acceptor = std::make_unique<asio::ip::tcp::acceptor>(io_context, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), client_port));
+    acceptor = std::make_unique<asio::ip::tcp::acceptor>(io_context, asio::ip::tcp::endpoint(asio::ip::make_address(client_address), client_port));
     listen_connection();
-    std::cout << "Starting redirection of any connection on 127.0.0.1:" << client_port << " to " << server_ip << ":" << server_port << std::endl;
+    std::cout << "Starting redirection of any connection on " << client_address << ":" << client_port << " to " << server_ip << ":" << server_port << std::endl;
     io_context.run();
 }
 

@@ -14,6 +14,7 @@ public:
     static const std::string active_conf_key;
     static const std::string server_address_key;
     static const std::string local_port_key;
+    static const std::string local_address_key;
     static const std::string text_file_log_key;
     static const std::string binary_file_log_key;
     static const std::string console_log_key;

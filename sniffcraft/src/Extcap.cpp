@@ -56,6 +56,7 @@ namespace Extcap
             std::string server_address = "127.0.0.1:25565";
             int local_port = 25555;
             bool online = false;
+            bool allow_remote = false;
             std::string account_cache_key;
             std::string conf_path;
             bool include_json = false;
@@ -142,6 +143,10 @@ namespace Extcap
                 else if (arg == "--online")
                 {
                     options.online = true;
+                }
+                else if (arg == "--allow-remote")
+                {
+                    options.allow_remote = true;
                 }
                 else if (arg == "--account-cache-key")
                 {
@@ -437,7 +442,10 @@ namespace Extcap
                 << "arg {number=7}{call=--conf}{display=SniffCraft conf file}{type=fileselect}{mustexist=true}"
                     "{tooltip=Optional, defaults to conf.json next to the extcap}{group=Capture}\n"
                 << "arg {number=8}{call=--file-logs}{display=Also write SniffCraft log files}{type=boolflag}{default=false}"
-                    "{tooltip=Keep the txt/bin/replay logs configured in the conf file}{group=Capture}\n";
+                    "{tooltip=Keep the txt/bin/replay logs configured in the conf file}{group=Capture}\n"
+                << "arg {number=9}{call=--allow-remote}{display=Allow connections from other devices}{type=boolflag}{default=false}"
+                    "{tooltip=Listen on all network interfaces instead of localhost only. In online mode, anyone who can reach this port "
+                    "joins the server with your Microsoft account}{group=Proxy}\n";
         }
 
         int Login(const Options& options, const std::filesystem::path& working_dir)
@@ -486,6 +494,7 @@ namespace Extcap
             ProtocolCraft::Json::Value overrides = {
                 { Conf::server_address_key, options.server_address },
                 { Conf::local_port_key, options.local_port },
+                { Conf::local_address_key, options.allow_remote ? "0.0.0.0" : "127.0.0.1" },
                 { Conf::online_key, options.online },
                 { Conf::console_log_key, false },
                 { Conf::network_recap_to_console_key, false },
