@@ -36,6 +36,8 @@ This is a fork of [SniffCraft](https://github.com/adepierre/SniffCraft) by [adep
 - **``.pcapng`` export** of SniffCraft sessions, to share them or open them later
 - Packets SniffCraft fails to parse are kept with their raw bytes instead of being dropped
 
+![Every packet containing "diamond": recipes with their nested ingredients, and the matching bytes](docs/wireshark-fields.png)
+
 ## Quick start
 
 ### Windows
@@ -55,6 +57,8 @@ Download ``sniffcraft-wireshark-linux.zip`` (Linux) or ``sniffcraft-wireshark.zi
 ### Live capture
 
 The capture options (gear icon) contain the Minecraft version, the server address, the local port SniffCraft listens on (default 25555) and a few logging options. Starting the capture starts the proxy, stopping it stops the proxy.
+
+<img src="docs/capture-options.png" alt="SniffCraft capture options in Wireshark" width="500">
 
 **Tip:** write the server address with its port (``play.example.com:25565``). Without a port SniffCraft first looks for a DNS SRV record, which can take a while if the DNS server doesn't answer.
 
