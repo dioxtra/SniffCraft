@@ -7,6 +7,11 @@ on:
 concurrency:
   group: ${{ github.workflow }}
 
+# Forks get a read-only GITHUB_TOKEN by default, this workflow comments on issues and uploads to the release
+permissions:
+  contents: write
+  issues: write
+
 jobs:
   check_if_build_needed:
     runs-on: ubuntu-latest

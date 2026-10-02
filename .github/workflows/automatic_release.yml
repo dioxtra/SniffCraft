@@ -11,6 +11,9 @@ on:
       - '.gitignore'
       - 'LICENSE'
 
+# Forks get a read-only GITHUB_TOKEN by default, the release job needs to publish
+permissions:
+  contents: write
 
 jobs:
   build_os_matrix:
