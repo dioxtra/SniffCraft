@@ -38,7 +38,7 @@ namespace Extcap
     namespace
     {
         constexpr std::string_view interface_value = "sniffcraft";
-        constexpr std::string_view help_url = "https://github.com/dioxtra/SniffCraft";
+        constexpr std::string_view help_url = "https://github.com/dioxtra/SniffCraft-Wireshark";
         constexpr int dlt_wireshark_upper_pdu = 252;
         /// @brief Folder next to the extcap with SniffCraft builds for other game versions (sniffcraft-<version>[.exe])
         constexpr std::string_view versions_folder = "sniffcraft_versions";
