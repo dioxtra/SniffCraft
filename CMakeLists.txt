@@ -8,6 +8,8 @@ option(SNIFFCRAFT_WITH_ENCRYPTION "Activate for online mode support" ON)
 option(SNIFFCRAFT_WITH_GUI "Activate for GUI support" ON)
 option(SNIFFCRAFT_FORCE_LOCAL_ZLIB "Force using a local install of zlib even if already present on the system" OFF)
 option(SNIFFCRAFT_FORCE_LOCAL_OPENSSL "Force using a local install of openSSL even if already present on the system" OFF)
+option(SNIFFCRAFT_DETAILED_PARSING "Keep the byte offsets of parsed fields (always on with the GUI, used for Wireshark byte highlighting)" OFF)
+set(SNIFFCRAFT_OUTPUT_DIR "${CMAKE_SOURCE_DIR}" CACHE PATH "Base output path, the executable goes in its bin folder")
 
 # Add Asio
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/asio.cmake")

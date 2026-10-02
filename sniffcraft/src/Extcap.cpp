@@ -7,6 +7,7 @@
 #include <botcraft/Network/Authentifier.hpp>
 #endif
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -17,13 +18,19 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <unistd.h>
 #endif
 
 #ifndef SNIFFCRAFT_GAME_VERSION
 #define SNIFFCRAFT_GAME_VERSION "unknown"
+#endif
+#ifndef SNIFFCRAFT_VERSION_TABLE
+#define SNIFFCRAFT_VERSION_TABLE ""
 #endif
 
 namespace Extcap
@@ -33,6 +40,9 @@ namespace Extcap
         constexpr std::string_view interface_value = "sniffcraft";
         constexpr std::string_view help_url = "https://github.com/dioxtra/SniffCraft";
         constexpr int dlt_wireshark_upper_pdu = 252;
+        /// @brief Folder next to the extcap with SniffCraft builds for other game versions (sniffcraft-<version>[.exe])
+        constexpr std::string_view versions_folder = "sniffcraft_versions";
+        constexpr std::string_view versions_prefix = "sniffcraft-";
 
         struct Options
         {
@@ -51,6 +61,17 @@ namespace Extcap
             bool include_json = false;
             bool respect_filters = false;
             bool file_logs = false;
+            std::string mc_version;
+            /// @brief Set when started by the SniffCraft build of another game version
+            std::string workdir;
+        };
+
+        struct InstalledVersion
+        {
+            std::string game_version;
+            int protocol_version;
+            /// @brief Empty for the current executable
+            std::filesystem::path executable;
         };
 
         Options ParseArgs(const int argc, char* argv[])
@@ -142,6 +163,14 @@ namespace Extcap
                 {
                     options.file_logs = true;
                 }
+                else if (arg == "--mc-version")
+                {
+                    options.mc_version = value();
+                }
+                else if (arg == "--extcap-workdir")
+                {
+                    options.workdir = value();
+                }
                 // Options we don't use but that come with a value
                 else if (arg == "--extcap-capture-filter" ||
                     arg == "--extcap-control-in" ||
@@ -178,11 +207,197 @@ namespace Extcap
             return std::filesystem::absolute(argv0).parent_path();
         }
 
+        /// @brief Game version -> protocol version for all the versions SniffCraft supports, oldest first
+        std::vector<std::pair<std::string, int>> GetVersionTable()
+        {
+            std::vector<std::pair<std::string, int>> table;
+            std::string_view remaining = SNIFFCRAFT_VERSION_TABLE;
+            while (!remaining.empty())
+            {
+                const size_t comma = remaining.find(',');
+                const std::string_view entry = remaining.substr(0, comma);
+                const size_t equal = entry.find('=');
+                if (equal != std::string_view::npos)
+                {
+                    table.push_back({ std::string(entry.substr(0, equal)), std::stoi(std::string(entry.substr(equal + 1))) });
+                }
+                if (comma == std::string_view::npos)
+                {
+                    break;
+                }
+                remaining.remove_prefix(comma + 1);
+            }
+            return table;
+        }
+
+        /// @brief Game versions this executable and the ones in versions_folder can capture, newest first
+        std::vector<InstalledVersion> GetInstalledVersions(const std::filesystem::path& extcap_dir)
+        {
+            const std::vector<std::pair<std::string, int>> table = GetVersionTable();
+            std::vector<InstalledVersion> versions = { { SNIFFCRAFT_GAME_VERSION, PROTOCOL_VERSION, {} } };
+
+            std::error_code ec;
+            for (const auto& entry : std::filesystem::directory_iterator(extcap_dir / versions_folder, ec))
+            {
+                const std::string stem = entry.path().stem().string();
+                if (!entry.is_regular_file() || stem.rfind(versions_prefix, 0) != 0)
+                {
+                    continue;
+                }
+                const std::string game_version = stem.substr(versions_prefix.size());
+                const auto it = std::find_if(table.begin(), table.end(), [&](const auto& p) { return p.first == game_version; });
+                // A single build is enough for all the game versions sharing a protocol version
+                if (it != table.end() &&
+                    std::none_of(versions.begin(), versions.end(), [&](const InstalledVersion& v) { return v.protocol_version == it->second; }))
+                {
+                    versions.push_back({ game_version, it->second, entry.path() });
+                }
+            }
+
+            std::sort(versions.begin(), versions.end(), [](const InstalledVersion& a, const InstalledVersion& b) {
+                return a.protocol_version > b.protocol_version;
+            });
+            return versions;
+        }
+
+        /// @brief "1.21.9 - 1.21.10" for all the game versions using this protocol version
+        std::string GetGameVersionRange(const int protocol_version)
+        {
+            std::vector<std::string> game_versions;
+            for (const auto& [game_version, protocol] : GetVersionTable())
+            {
+                if (protocol == protocol_version)
+                {
+                    game_versions.push_back(game_version);
+                }
+            }
+            if (game_versions.empty())
+            {
+                return "?";
+            }
+            return game_versions.size() == 1 ? game_versions.front() : game_versions.front() + " - " + game_versions.back();
+        }
+
+#ifdef _WIN32
+        /// @brief Quote an argument following CommandLineToArgvW rules
+        std::wstring QuoteArgument(const std::wstring& arg)
+        {
+            if (!arg.empty() && arg.find_first_of(L" \t\n\v\"") == std::wstring::npos)
+            {
+                return arg;
+            }
+            std::wstring quoted = L"\"";
+            size_t backslashes = 0;
+            for (const wchar_t c : arg)
+            {
+                if (c == L'\\')
+                {
+                    backslashes += 1;
+                    continue;
+                }
+                quoted.append(c == L'"' ? backslashes * 2 + 1 : backslashes, L'\\');
+                backslashes = 0;
+                quoted.push_back(c);
+            }
+            quoted.append(backslashes * 2, L'\\');
+            quoted.push_back(L'"');
+            return quoted;
+        }
+
+        std::wstring ToWide(const std::string& s)
+        {
+            const int size = MultiByteToWideChar(CP_ACP, 0, s.c_str(), static_cast<int>(s.size()), nullptr, 0);
+            std::wstring output(size, L'\0');
+            MultiByteToWideChar(CP_ACP, 0, s.c_str(), static_cast<int>(s.size()), output.data(), size);
+            return output;
+        }
+#endif
+
+        /// @brief Run the capture with the SniffCraft build of another game version
+        /// @return Exit code of the other build
+        int RunOtherVersion(const std::filesystem::path& executable, const int argc, char* argv[], const std::filesystem::path& working_dir)
+        {
+            // Same arguments, the other build shares our conf, logs and credentials folder
+            std::vector<std::string> args;
+            for (int i = 1; i < argc; ++i)
+            {
+                const std::string_view arg = argv[i];
+                if (arg == "--mc-version")
+                {
+                    i += 1;
+                    continue;
+                }
+                if (arg.rfind("--mc-version=", 0) == 0)
+                {
+                    continue;
+                }
+                args.push_back(argv[i]);
+            }
+            args.push_back("--extcap-workdir=" + working_dir.string());
+
+#ifdef _WIN32
+            std::wstring command_line = QuoteArgument(executable.wstring());
+            for (const std::string& arg : args)
+            {
+                command_line += L" " + QuoteArgument(ToWide(arg));
+            }
+
+            STARTUPINFOW startup_info{};
+            startup_info.cb = sizeof(startup_info);
+            startup_info.dwFlags = STARTF_USESTDHANDLES;
+            startup_info.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+            startup_info.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+            startup_info.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+            for (const HANDLE handle : { startup_info.hStdInput, startup_info.hStdOutput, startup_info.hStdError })
+            {
+                if (handle != nullptr && handle != INVALID_HANDLE_VALUE)
+                {
+                    SetHandleInformation(handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+                }
+            }
+
+            // Wireshark kills this process when the capture stops, the job makes sure the other build goes with it
+            const HANDLE job = CreateJobObjectW(nullptr, nullptr);
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
+
+            PROCESS_INFORMATION process_info{};
+            if (!CreateProcessW(executable.wstring().c_str(), command_line.data(), nullptr, nullptr, TRUE, CREATE_SUSPENDED, nullptr, nullptr, &startup_info, &process_info))
+            {
+                std::cerr << "Error trying to start " << executable.string() << " (error " << GetLastError() << ")" << std::endl;
+                CloseHandle(job);
+                return 1;
+            }
+            AssignProcessToJobObject(job, process_info.hProcess);
+            ResumeThread(process_info.hThread);
+            WaitForSingleObject(process_info.hProcess, INFINITE);
+
+            DWORD exit_code = 1;
+            GetExitCodeProcess(process_info.hProcess, &exit_code);
+            CloseHandle(process_info.hThread);
+            CloseHandle(process_info.hProcess);
+            CloseHandle(job);
+            return static_cast<int>(exit_code);
+#else
+            const std::string executable_str = executable.string();
+            std::vector<char*> exec_args = { const_cast<char*>(executable_str.c_str()) };
+            for (std::string& arg : args)
+            {
+                exec_args.push_back(arg.data());
+            }
+            exec_args.push_back(nullptr);
+            execv(executable_str.c_str(), exec_args.data());
+            std::cerr << "Error trying to start " << executable_str << std::endl;
+            return 1;
+#endif
+        }
+
         void PrintInterfaces()
         {
             std::cout
                 << "extcap {version=1.0}{help=" << help_url << "}\n"
-                << "interface {value=" << interface_value << "}{display=SniffCraft Minecraft proxy (MC " << SNIFFCRAFT_GAME_VERSION << ")}\n";
+                << "interface {value=" << interface_value << "}{display=SniffCraft Minecraft proxy}\n";
         }
 
         void PrintDlts()
@@ -190,24 +405,34 @@ namespace Extcap
             std::cout << "dlt {number=" << dlt_wireshark_upper_pdu << "}{name=WIRESHARK_UPPER_PDU}{display=Minecraft packets (SniffCraft)}\n";
         }
 
-        void PrintConfig()
+        void PrintConfig(const std::filesystem::path& extcap_dir)
         {
             std::cout
-                << "arg {number=0}{call=--server}{display=Minecraft server}{type=string}{default=127.0.0.1:25565}"
+                << "arg {number=0}{call=--mc-version}{display=Minecraft version}{type=selector}"
+                    "{tooltip=Version of your Minecraft client}{group=Proxy}\n";
+            bool is_default = true;
+            for (const InstalledVersion& version : GetInstalledVersions(extcap_dir))
+            {
+                std::cout << "value {arg=0}{value=" << version.game_version << "}{display=" << GetGameVersionRange(version.protocol_version)
+                    << " (protocol " << version.protocol_version << ")}{default=" << (is_default ? "true" : "false") << "}\n";
+                is_default = false;
+            }
+            std::cout
+                << "arg {number=1}{call=--server}{display=Minecraft server}{type=string}{default=127.0.0.1:25565}"
                     "{tooltip=Server SniffCraft connects to (address or address:port, SRV records are resolved)}{required=true}{group=Proxy}\n"
-                << "arg {number=1}{call=--port}{display=Local proxy port}{type=unsigned}{default=25555}{range=1,65535}"
+                << "arg {number=2}{call=--port}{display=Local proxy port}{type=unsigned}{default=25555}{range=1,65535}"
                     "{tooltip=Connect your Minecraft client to localhost on this port}{group=Proxy}\n"
-                << "arg {number=2}{call=--online}{display=Online mode (Microsoft account)}{type=boolflag}{default=false}"
+                << "arg {number=3}{call=--online}{display=Online mode (Microsoft account)}{type=boolflag}{default=false}"
                     "{tooltip=Needed for online-mode servers. Log in once with: sniffcraft --extcap-login}{group=Proxy}\n"
-                << "arg {number=3}{call=--account-cache-key}{display=Microsoft account cache key}{type=string}{default=}"
+                << "arg {number=4}{call=--account-cache-key}{display=Microsoft account cache key}{type=string}{default=}"
                     "{tooltip=Only needed if you logged in with several Microsoft accounts}{group=Proxy}\n"
-                << "arg {number=4}{call=--json}{display=Include ProtocolCraft JSON}{type=boolflag}{default=false}"
+                << "arg {number=5}{call=--json}{display=Include ProtocolCraft JSON}{type=boolflag}{default=false}"
                     "{tooltip=Also store the full json of each packet (bigger captures, enables json.* filters)}{group=Capture}\n"
-                << "arg {number=5}{call=--respect-filters}{display=Apply conf ignore lists}{type=boolflag}{default=false}"
+                << "arg {number=6}{call=--respect-filters}{display=Apply conf ignore lists}{type=boolflag}{default=false}"
                     "{tooltip=Don't send packets ignored in the SniffCraft conf file}{group=Capture}\n"
-                << "arg {number=6}{call=--conf}{display=SniffCraft conf file}{type=fileselect}{mustexist=true}"
+                << "arg {number=7}{call=--conf}{display=SniffCraft conf file}{type=fileselect}{mustexist=true}"
                     "{tooltip=Optional, defaults to conf.json next to the extcap}{group=Capture}\n"
-                << "arg {number=7}{call=--file-logs}{display=Also write SniffCraft log files}{type=boolflag}{default=false}"
+                << "arg {number=8}{call=--file-logs}{display=Also write SniffCraft log files}{type=boolflag}{default=false}"
                     "{tooltip=Keep the txt/bin/replay logs configured in the conf file}{group=Capture}\n";
         }
 
@@ -332,7 +557,8 @@ namespace Extcap
     int Run(const int argc, char* argv[])
     {
         const Options options = ParseArgs(argc, argv);
-        const std::filesystem::path working_dir = GetExecutableDirectory(argv[0]);
+        const std::filesystem::path extcap_dir = GetExecutableDirectory(argv[0]);
+        const std::filesystem::path working_dir = options.workdir.empty() ? extcap_dir : std::filesystem::path(options.workdir);
 
         if (options.login)
         {
@@ -355,11 +581,23 @@ namespace Extcap
         }
         if (options.list_config)
         {
-            PrintConfig();
+            PrintConfig(extcap_dir);
             return 0;
         }
         if (options.capture)
         {
+            if (!options.mc_version.empty() && options.mc_version != SNIFFCRAFT_GAME_VERSION)
+            {
+                for (const InstalledVersion& version : GetInstalledVersions(extcap_dir))
+                {
+                    if (version.game_version == options.mc_version)
+                    {
+                        return version.executable.empty() ? Capture(options, working_dir) : RunOtherVersion(version.executable, argc, argv, working_dir);
+                    }
+                }
+                std::cerr << "SniffCraft for Minecraft " << options.mc_version << " is not installed in " << (extcap_dir / versions_folder).string() << std::endl;
+                return 1;
+            }
             return Capture(options, working_dir);
         }
 

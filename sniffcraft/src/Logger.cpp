@@ -762,8 +762,8 @@ void Logger::LogConsume()
             }
             if (is_detailed)
             {
-#ifdef WITH_GUI
-                output << "\n" << RemoveParsingDetails(item.packet->Serialize()).Dump(4);
+#ifdef PROTOCOLCRAFT_DETAILED_PARSING
+                output << "\n" << PcapngStripOffsets(item.packet->Serialize()).Dump(4);
 #else
                 output << "\n" << item.packet->Serialize().Dump(4);
 #endif
