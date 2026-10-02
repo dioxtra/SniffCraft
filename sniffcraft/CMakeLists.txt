@@ -7,12 +7,14 @@ set(sniffcraft_PUBLIC_HDR
     include/sniffcraft/Connection.hpp
     include/sniffcraft/DataProcessor.hpp
     include/sniffcraft/enums.hpp
+    include/sniffcraft/Extcap.hpp
     include/sniffcraft/Logger.hpp
     include/sniffcraft/LogItem.hpp
     include/sniffcraft/MinecraftEncryptionDataProcessor.hpp
     include/sniffcraft/MinecraftProxy.hpp
     include/sniffcraft/NetworkRecapItem.hpp
     include/sniffcraft/PacketUtilities.hpp
+    include/sniffcraft/PcapngWriter.hpp
     include/sniffcraft/ReplayModLogger.hpp
     include/sniffcraft/server.hpp
 
@@ -37,9 +39,11 @@ set(sniffcraft_SRC
     src/Compression.cpp
     src/conf.cpp
     src/Connection.cpp
+    src/Extcap.cpp
     src/Logger.cpp
     src/MinecraftEncryptionDataProcessor.cpp
     src/MinecraftProxy.cpp
+    src/PcapngWriter.cpp
     src/ReplayModLogger.cpp
     src/server.cpp
     src/main.cpp
@@ -105,6 +109,9 @@ endif(MSVC)
 target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rdparty/botcraft/botcraft/private_include")
 target_include_directories(${PROJECT_NAME} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../3rdparty/botcraft/botcraft/include")
+
+# Displayed in Wireshark interface list
+target_compile_definitions(${PROJECT_NAME} PRIVATE SNIFFCRAFT_GAME_VERSION="${GAME_VERSION}")
 
 if (MSVC)
     set_target_properties(${PROJECT_NAME} PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded")

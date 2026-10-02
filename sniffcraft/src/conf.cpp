@@ -19,6 +19,9 @@ const std::string Conf::binary_file_log_key = "LogToBinFile";
 const std::string Conf::console_log_key = "LogToConsole";
 const std::string Conf::replay_log_key = "LogToReplay";
 const std::string Conf::raw_bytes_log_key = "LogRawBytes";
+const std::string Conf::pcapng_log_key = "LogToPcapng";
+const std::string Conf::pcapng_json_key = "PcapngIncludeJson";
+const std::string Conf::pcapng_respect_filters_key = "PcapngRespectFilters";
 const std::string Conf::online_key = "Online";
 const std::string Conf::network_recap_to_console_key = "NetworkRecapToConsole";
 const std::string Conf::account_cache_key_key = "MicrosoftAccountCacheKey";
@@ -44,11 +47,21 @@ std::optional<std::string> Conf::active_conf = std::nullopt;
 
 std::shared_mutex Conf::conf_mutex;
 
+ProtocolCraft::Json::Value Conf::overrides;
+
 ProtocolCraft::Json::Value Conf::LoadConf()
 {
     const ProtocolCraft::Json::Value main_json = LoadConfFile();
 
     ProtocolCraft::Json::Value json = main_json[active_conf.value()];
+
+    if (overrides.is_object())
+    {
+        for (const auto& [k, v] : overrides.get_object())
+        {
+            json[k] = v;
+        }
+    }
 
     // Set default values if missing
     if (!json.contains(server_address_key))
@@ -65,6 +78,12 @@ ProtocolCraft::Json::Value Conf::LoadConf()
         json[replay_log_key] = false;
     if (!json.contains(raw_bytes_log_key))
         json[raw_bytes_log_key] = false;
+    if (!json.contains(pcapng_log_key))
+        json[pcapng_log_key] = false;
+    if (!json.contains(pcapng_json_key))
+        json[pcapng_json_key] = false;
+    if (!json.contains(pcapng_respect_filters_key))
+        json[pcapng_respect_filters_key] = false;
     if (!json.contains(online_key))
         json[online_key] = false;
     if (!json.contains(account_cache_key_key))

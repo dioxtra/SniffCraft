@@ -7,6 +7,7 @@
 
 #include <chrono>
 #include <memory>
+#include <vector>
 
 struct LogItem
 {
@@ -15,4 +16,6 @@ struct LogItem
     ProtocolCraft::ConnectionState connection_state;
     Endpoint origin;
     size_t bandwidth_bytes;
+    /// @brief Bytes (packet id included) of a packet that couldn't be parsed, only set when packet is nullptr
+    std::vector<unsigned char> raw_bytes;
 };

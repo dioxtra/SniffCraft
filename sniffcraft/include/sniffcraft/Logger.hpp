@@ -3,6 +3,7 @@
 #include "sniffcraft/enums.hpp"
 #include "sniffcraft/LogItem.hpp"
 #include "sniffcraft/NetworkRecapItem.hpp"
+#include "sniffcraft/PcapngWriter.hpp"
 
 #include <protocolCraft/enums.hpp>
 #include <protocolCraft/Packet.hpp>
@@ -30,6 +31,9 @@ public:
 #endif
     ~Logger();
     void Log(const std::shared_ptr<ProtocolCraft::Packet>& packet, const ProtocolCraft::ConnectionState connection_state, const Endpoint origin, const size_t bandwidth_bytes);
+    /// @brief Log a packet that couldn't be parsed
+    /// @param raw_bytes Uncompressed packet bytes, packet id included
+    void LogUnparsed(std::vector<unsigned char>&& raw_bytes, const ProtocolCraft::ConnectionState connection_state, const Endpoint origin, const size_t bandwidth_bytes);
     const std::string& GetBaseFilename() const;
     void LoadConfig();
     void Stop();
@@ -42,7 +46,9 @@ public:
 #endif
 
 private:
+    void Push(LogItem&& item);
     void LogConsume();
+    void WritePcapngRecord(const LogItem& item);
     void LoadPacketsFromJson(const ProtocolCraft::Json::Value& value, const ProtocolCraft::ConnectionState connection_state);
     std::string_view OriginToString(const Endpoint origin) const;
     std::string_view ConnectionStateToString(const ProtocolCraft::ConnectionState connection_state) const;
@@ -70,6 +76,13 @@ private:
     bool log_to_console;
     bool log_raw_bytes;
     bool log_network_recap_console;
+    bool log_to_pcapng;
+    bool pcapng_include_json;
+    bool pcapng_respect_filters;
+    std::shared_ptr<PcapngWriter> pcapng_writer;
+    /// @brief Identifies this connection in pcapng records
+    uint32_t connection_id = 0;
+    static std::atomic<uint32_t> next_connection_id;
 #ifdef WITH_GUI
     bool in_gui;
 #endif

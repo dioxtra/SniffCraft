@@ -20,9 +20,12 @@
 
 using namespace ProtocolCraft;
 
+std::atomic<uint32_t> Logger::next_connection_id{ 0 };
+
 Logger::Logger()
 {
     start_time = std::chrono::system_clock::now();
+    connection_id = next_connection_id++;
     auto in_time_t = std::chrono::system_clock::to_time_t(start_time);
 
     std::stringstream ss;
@@ -149,7 +152,31 @@ Logger::~Logger()
 
 void Logger::Log(const std::shared_ptr<Packet>& packet, const ConnectionState connection_state, const Endpoint origin, const size_t bandwidth_bytes)
 {
+    Push({ packet, std::chrono::system_clock::now(), connection_state, origin, bandwidth_bytes });
+}
+
+void Logger::LogUnparsed(std::vector<unsigned char>&& raw_bytes, const ConnectionState connection_state, const Endpoint origin, const size_t bandwidth_bytes)
+{
+    Push({ nullptr, std::chrono::system_clock::now(), connection_state, origin, bandwidth_bytes, std::move(raw_bytes) });
+}
+
+void Logger::Push(LogItem&& item)
+{
     std::lock_guard<std::mutex> log_guard(log_mutex);
+    if (log_to_pcapng && pcapng_writer == nullptr)
+    {
+        // In extcap mode all connections write to the same Wireshark pipe
+        pcapng_writer = PcapngWriter::GetShared();
+        if (pcapng_writer == nullptr)
+        {
+            pcapng_writer = std::make_shared<PcapngWriter>();
+            if (!pcapng_writer->Open(base_filename + ".pcapng"))
+            {
+                std::cerr << "Error trying to open " << base_filename << ".pcapng" << std::endl;
+            }
+        }
+    }
+
     bool need_to_create_txt_file = log_to_file && !log_file.is_open();
     bool need_to_create_binary_file = log_to_binary_file && !binary_file.is_open();
     if (need_to_create_txt_file || need_to_create_binary_file)
@@ -169,7 +196,7 @@ void Logger::Log(const std::shared_ptr<Packet>& packet, const ConnectionState co
         }
     }
 
-    logging_queue.push({ packet, std::chrono::system_clock::now(), connection_state, origin, bandwidth_bytes });
+    logging_queue.push(std::move(item));
     log_condition.notify_all();
 }
 
@@ -606,6 +633,10 @@ void Logger::LogConsume()
                 {
                     std::cout << output_str << std::endl;
                 }
+                if (log_to_pcapng)
+                {
+                    WritePcapngRecord(item);
+                }
                 continue;
             }
 
@@ -647,6 +678,12 @@ void Logger::LogConsume()
                 binary_file.write(reinterpret_cast<const char*>(serialized.data()), serialized.size());
             }
 
+            // By default everything goes to Wireshark, filtering is done there
+            if (log_to_pcapng && !pcapng_respect_filters)
+            {
+                WritePcapngRecord(item);
+            }
+
 #ifdef WITH_GUI
             if (in_gui)
             {
@@ -679,6 +716,11 @@ void Logger::LogConsume()
                 {
                     continue;
                 }
+            }
+
+            if (log_to_pcapng && pcapng_respect_filters)
+            {
+                WritePcapngRecord(item);
             }
 
 #ifdef WITH_GUI
@@ -764,6 +806,70 @@ void Logger::LogConsume()
     }
 }
 
+void Logger::WritePcapngRecord(const LogItem& item)
+{
+    if (pcapng_writer == nullptr)
+    {
+        return;
+    }
+
+    PcapngRecord record;
+    record.origin = static_cast<uint8_t>(item.origin);
+    record.connection_state = static_cast<int>(item.connection_state) < 0 ? 0xFF : static_cast<uint8_t>(item.connection_state);
+    record.protocol_version = PROTOCOL_VERSION;
+    record.connection_id = connection_id;
+    record.wire_size = static_cast<uint32_t>(item.bandwidth_bytes);
+
+    if (item.packet == nullptr)
+    {
+        record.parse_error = true;
+        record.raw = item.raw_bytes;
+        try
+        {
+            ReadIterator iter = record.raw.cbegin();
+            size_t length = record.raw.size();
+            record.packet_id = ReadData<VarInt>(iter, length);
+        }
+        catch (const std::exception&)
+        {
+            record.packet_id = -1;
+        }
+    }
+    else
+    {
+        record.packet_id = item.packet->GetId();
+        record.name = GetPacketName(item);
+        item.packet->Write(record.raw);
+
+        Json::Value json;
+#ifdef PROTOCOLCRAFT_DETAILED_PARSING
+        // Parse the written bytes again so the offsets match record.raw (see Render)
+        try
+        {
+            ReadIterator iter = record.raw.cbegin();
+            size_t length = record.raw.size();
+            ReadData<VarInt>(iter, length);
+            std::shared_ptr<Packet> cloned = item.packet->CopyTypeOnly();
+            cloned->Read(iter, length);
+            json = cloned->Serialize();
+        }
+        catch (const std::exception&)
+        {
+            json = item.packet->Serialize();
+        }
+#else
+        json = item.packet->Serialize();
+#endif
+        record.fields = PcapngFieldsFromJson(json, record.raw.size());
+        if (pcapng_include_json)
+        {
+            record.json = PcapngStripOffsets(json).Dump();
+        }
+    }
+
+    pcapng_writer->Write(item.date, record);
+}
+
 void Logger::LoadConfig()
 {
     std::time_t modification_time = Conf::GetModifiedTimestamp();
@@ -797,6 +903,9 @@ void Logger::LoadConfig()
     log_network_recap_console = conf.contains(Conf::network_recap_to_console_key) && conf[Conf::network_recap_to_console_key].get<bool>();
     log_raw_bytes = conf.contains(Conf::raw_bytes_log_key) && conf[Conf::raw_bytes_log_key].get<bool>();
     log_to_binary_file = conf.contains(Conf::binary_file_log_key) && conf[Conf::binary_file_log_key].get<bool>();
+    log_to_pcapng = conf.contains(Conf::pcapng_log_key) && conf[Conf::pcapng_log_key].get<bool>();
+    pcapng_include_json = conf.contains(Conf::pcapng_json_key) && conf[Conf::pcapng_json_key].get<bool>();
+    pcapng_respect_filters = conf.contains(Conf::pcapng_respect_filters_key) && conf[Conf::pcapng_respect_filters_key].get<bool>();
 #ifdef WITH_GUI
     in_gui = !Conf::headless;
 #endif

@@ -116,6 +116,10 @@ size_t MinecraftProxy::ProcessData(const std::vector<unsigned char>::const_itera
         }
     }
 
+    // Keep track of the uncompressed bytes to log them if parsing fails
+    const std::vector<unsigned char>::const_iterator packet_bytes_begin = data_iterator;
+    const size_t packet_bytes_size = remaining_packet_bytes;
+
     const int minecraft_id = ReadData<VarInt>(data_iterator, remaining_packet_bytes);
 
     std::shared_ptr<Packet> packet = source == Endpoint::Client ?
@@ -172,6 +176,11 @@ size_t MinecraftProxy::ProcessData(const std::vector<unsigned char>::const_itera
     {
         // The packet has been replaced, log it as intercepted by sniffcraft
         logger->Log(packet, old_connection_state, source == Endpoint::Server ? Endpoint::ServerToSniffcraft : Endpoint::ClientToSniffcraft, packet_length + packet_length_length);
+    }
+
+    if (error_parsing)
+    {
+        logger->LogUnparsed(std::vector<unsigned char>(packet_bytes_begin, packet_bytes_begin + packet_bytes_size), old_connection_state, source, packet_length + packet_length_length);
     }
 
     // Return the number of bytes we read (or rather should have read in case of error)

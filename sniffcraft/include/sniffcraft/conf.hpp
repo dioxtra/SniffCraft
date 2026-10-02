@@ -19,6 +19,9 @@ public:
     static const std::string console_log_key;
     static const std::string replay_log_key;
     static const std::string raw_bytes_log_key;
+    static const std::string pcapng_log_key;
+    static const std::string pcapng_json_key;
+    static const std::string pcapng_respect_filters_key;
     static const std::string online_key;
     static const std::string network_recap_to_console_key;
     static const std::string account_cache_key_key;
@@ -36,6 +39,8 @@ public:
     static std::string conf_path;
     static std::optional<std::string> active_conf;
     static std::shared_mutex conf_mutex;
+    /// @brief Values that take precedence over the conf file (set by extcap mode)
+    static ProtocolCraft::Json::Value overrides;
 
 public:
     static ProtocolCraft::Json::Value LoadConf();
