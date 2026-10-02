@@ -1,6 +1,8 @@
 name: Automatic Release
 
 on:
+  # Can also be started from the Actions tab
+  workflow_dispatch:
   push:
     branches:
       - master
