@@ -10,7 +10,7 @@
 
 This is a fork of [SniffCraft](https://github.com/adepierre/SniffCraft) by [adepierre](https://github.com/adepierre), a proxy that sits between a Minecraft client and a server and decodes everything they exchange (encryption, compression, every packet field). This fork plugs it into [Wireshark](https://www.wireshark.org/): SniffCraft becomes a capture interface, and Minecraft dissectors let you filter, search, color and inspect the packets byte by byte with all the Wireshark tools.
 
-<!-- Wireshark screenshot -->
+![Chat packets of a live capture in Wireshark, with the fields parsed by SniffCraft and by minecraft-data](docs/wireshark.png)
 
 ```
     ┌────────┐       ┌──────────────┐       ┌────────┐
