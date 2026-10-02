@@ -12,9 +12,9 @@ on:
       - 'LICENSE'
       - 'docs/**'
 
-# Forks get a read-only GITHUB_TOKEN by default, the release job needs to publish
+# Builds only need to read the repository, the release job gets more below
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build_os_matrix:
@@ -76,6 +76,12 @@ jobs:
       - build_versions
     # A failed build for an old version shouldn't block the release, the bundles just won't have it
     if: ${{ !cancelled() && needs.build_os_matrix.result == 'success' }}
+    permissions:
+      # Publish the release
+      contents: write
+      # Build provenance attestations
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v6
         with:
@@ -129,6 +135,8 @@ jobs:
             echo -en '\n' >> release_note.txt
             echo "Wireshark: sniffcraft-wireshark-windows.zip and sniffcraft-wireshark-linux.zip contain SniffCraft for many Minecraft versions and the dissectors (sniffcraft-wireshark.zip only has the dissectors), see the [Wireshark section](https://github.com/${{ github.repository }}#wireshark) of the README." >> release_note.txt
             echo -en '\n' >> release_note.txt
+            echo "🔒 SHA256SUMS.txt lists the checksum of every file, and each one has a build provenance attestation proving it was built by this workflow from this repository: \`gh attestation verify <file> -R ${{ github.repository }}\`" >> release_note.txt
+            echo -en '\n' >> release_note.txt
             echo "💡 If you need binaries for a previous version of Minecraft, you can open [an issue using this link](https://github.com/${{ github.repository }}/issues/new?assignees=&labels=version+request&template=version-request.yml&title=%5BVersion+request%5D) and it will be automagically generated for you in a few minutes." >> release_note.txt
             echo -en '\n' >> release_note.txt
             echo **Changes:** >> release_note.txt
@@ -161,6 +169,28 @@ jobs:
         working-directory: wireshark
         run: zip -r ../sniffcraft-wireshark.zip sniffcraft.lua minecraft.lua minecraft_mcdata install.ps1
 
+      - name: Compute checksums
+        run: >
+          sha256sum
+          sniffcraft-linux-${{ steps.mc-version.outputs.version }}
+          sniffcraft-windows-${{ steps.mc-version.outputs.version }}.exe
+          sniffcraft-macos-${{ steps.mc-version.outputs.version }}
+          sniffcraft-wireshark.zip
+          sniffcraft-wireshark-windows.zip
+          sniffcraft-wireshark-linux.zip
+          > SHA256SUMS.txt
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            sniffcraft-linux-${{ steps.mc-version.outputs.version }}
+            sniffcraft-windows-${{ steps.mc-version.outputs.version }}.exe
+            sniffcraft-macos-${{ steps.mc-version.outputs.version }}
+            sniffcraft-wireshark.zip
+            sniffcraft-wireshark-windows.zip
+            sniffcraft-wireshark-linux.zip
+
       - name: Remove old latest release
         run: gh release delete latest --repo ${{ github.repository }} --cleanup-tag -y || true
         env:
@@ -175,6 +205,7 @@ jobs:
           sniffcraft-wireshark.zip
           sniffcraft-wireshark-windows.zip
           sniffcraft-wireshark-linux.zip
+          SHA256SUMS.txt
           --repo ${{ github.repository }}
           --latest
           -F release_note.txt

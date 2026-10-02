@@ -7,9 +7,9 @@ on:
 concurrency:
   group: ${{ github.workflow }}
 
-# Forks get a read-only GITHUB_TOKEN by default, this workflow comments on issues and uploads to the release
+# Every job comments on the request issue, only update_release can modify the release
 permissions:
-  contents: write
+  contents: read
   issues: write
 
 jobs:
@@ -116,6 +116,9 @@ jobs:
       - check_if_build_needed
       - os_matrix
       - notify_build_started
+    permissions:
+      contents: write
+      issues: write
     steps:
       - name: Download Linux artifact
         uses: actions/download-artifact@v8

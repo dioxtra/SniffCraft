@@ -56,7 +56,7 @@ Download ``sniffcraft-wireshark-linux.zip`` (Linux) or ``sniffcraft-wireshark.zi
 
 ### Live capture
 
-The capture options (gear icon) contain the Minecraft version, the server address, the local port SniffCraft listens on (default 25555) and a few logging options. Starting the capture starts the proxy, stopping it stops the proxy.
+The capture options (gear icon) contain the Minecraft version, the server address, the local port SniffCraft listens on (default 25555, this computer only) and a few logging options. Starting the capture starts the proxy, stopping it stops the proxy.
 
 <img src="docs/capture-options.png" alt="SniffCraft capture options in Wireshark" width="500">
 
@@ -101,6 +101,13 @@ Movement, entity and chunk packets are most of the traffic, hiding them makes th
 ### Raw TCP traffic
 
 ``minecraft.lua`` decodes unencrypted Minecraft traffic on TCP ports 25565 and 25555 (configurable in the *Minecraft Java* protocol preferences): offline-mode and LAN servers, or the client side of a SniffCraft session captured on the loopback interface. Online-mode traffic is encrypted after the login and can only be read through SniffCraft.
+
+## Security and privacy
+
+- **The proxy only accepts connections from this computer.** In online mode, SniffCraft joins the server with your Microsoft account whatever client connects to it, so it listens on ``127.0.0.1`` by default. The *Allow connections from other devices* capture option (or ``"LocalAddress": "0.0.0.0"`` in the conf file) opens it to your network: only use it on a network you trust, and only while you need it.
+- **Your Microsoft login is cached in ``botcraft_cached_credentials.json``**, next to the SniffCraft executable (``%APPDATA%\Wireshark\extcap`` for the Wireshark install). It contains a refresh token that lets anyone who has the file join Minecraft servers as you: never share this file or the folder containing it. Delete it to log out.
+- **Captures contain personal data**: your username and UUID, chat messages (private ones included), coordinates and the server address. They never contain your password or tokens, authentication happens over HTTPS outside of the Minecraft connection, but have a look before sharing a ``.pcapng`` file.
+- **Verifying downloads**: release files are built by GitHub Actions from this repository. ``SHA256SUMS.txt`` lists their checksums and each file has a build provenance attestation, which can be checked with ``gh attestation verify sniffcraft-wireshark-windows.zip -R dioxtra/SniffCraft-Wireshark``. The executables are not code signed, so Windows SmartScreen may warn about them.
 
 ## How it works
 
@@ -198,7 +205,7 @@ sniffcraft <optional:--headless> <optional:conf/file/path>
 
 conf/file/path is the path to a json file, and can be used to set authentication information and filter out the packets. Examples can be found in the [conf](conf/) directory. If no path is given, a default conf.json file will be created. With the default configuration, only the names of the packets are logged. When a packet is added to an ignored list, it won't appear in the logs, when it's in a detail list, its full content will be logged. Packets can be added either by id or by name (as registered in protocolCraft), but as id can vary from one version to another, using names is safer.
 
-ServerAddress should match the address of the server you want to connect to, with the same format as in a regular minecraft client. Custom URL with DNS SRV records are supported (like MyServer.Example.net for example). You can then connect your official minecraft client to SniffCraft as if it were a regular server using <your computer IP:LocalPort>. If you are running SniffCraft on the same computer as your client, something like 127.0.0.1:LocalPort should work.
+ServerAddress should match the address of the server you want to connect to, with the same format as in a regular minecraft client. Custom URL with DNS SRV records are supported (like MyServer.Example.net for example). You can then connect your official minecraft client to SniffCraft as if it were a regular server using 127.0.0.1:LocalPort. By default SniffCraft only accepts connections from the same computer (``LocalAddress`` is ``127.0.0.1``), set ``LocalAddress`` to ``0.0.0.0`` to connect from another device using <your computer IP:LocalPort>, see [Security and privacy](#security-and-privacy) first.
 
 ### Replay Mod
 
