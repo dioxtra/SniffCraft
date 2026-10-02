@@ -239,12 +239,17 @@ namespace Extcap
             std::error_code ec;
             for (const auto& entry : std::filesystem::directory_iterator(extcap_dir / versions_folder, ec))
             {
-                const std::string stem = entry.path().stem().string();
-                if (!entry.is_regular_file() || stem.rfind(versions_prefix, 0) != 0)
+                // Not path::stem(), sniffcraft-1.21.10 has no extension outside of Windows
+                std::string name = entry.path().filename().string();
+                if (name.size() > 4 && name.compare(name.size() - 4, 4, ".exe") == 0)
+                {
+                    name.resize(name.size() - 4);
+                }
+                if (!entry.is_regular_file() || name.rfind(versions_prefix, 0) != 0)
                 {
                     continue;
                 }
-                const std::string game_version = stem.substr(versions_prefix.size());
+                const std::string game_version = name.substr(versions_prefix.size());
                 const auto it = std::find_if(table.begin(), table.end(), [&](const auto& p) { return p.first == game_version; });
                 // A single build is enough for all the game versions sharing a protocol version
                 if (it != table.end() &&
@@ -410,12 +415,11 @@ namespace Extcap
             std::cout
                 << "arg {number=0}{call=--mc-version}{display=Minecraft version}{type=selector}"
                     "{tooltip=Version of your Minecraft client}{group=Proxy}\n";
-            bool is_default = true;
             for (const InstalledVersion& version : GetInstalledVersions(extcap_dir))
             {
+                // This executable version is the default, it doesn't need to start another one
                 std::cout << "value {arg=0}{value=" << version.game_version << "}{display=" << GetGameVersionRange(version.protocol_version)
-                    << " (protocol " << version.protocol_version << ")}{default=" << (is_default ? "true" : "false") << "}\n";
-                is_default = false;
+                    << " (protocol " << version.protocol_version << ")}{default=" << (version.executable.empty() ? "true" : "false") << "}\n";
             }
             std::cout
                 << "arg {number=1}{call=--server}{display=Minecraft server}{type=string}{default=127.0.0.1:25565}"
