@@ -175,6 +175,11 @@ local function value_key(value)
     return tostring(value)
 end
 
+-- string.format follows the locale Wireshark runs with, which can use a decimal comma
+local function format_float(value, digits)
+    return (string.format("%." .. digits .. "g", value):gsub(",", "."))
+end
+
 local function display_string(s)
     if #s > MAX_STRING_DISPLAY then
         s = s:sub(1, MAX_STRING_DISPLAY) .. "..."
@@ -391,7 +396,7 @@ local function float_type(size)
         local start = r.pos
         local value = r.tvb(start, size):float()
         r.pos = r.pos + size
-        r:add(tree, name, path, start, string.format("%.7g", value))
+        r:add(tree, name, path, start, format_float(value, 7))
         return value
     end
 end
@@ -695,7 +700,7 @@ natives.lpVec3 = function(r, _, name, tree, _, path)
         return math.min((packed >> shift) & 0x7FFF, 32766) * 2.0 / 32766.0 - 1.0
     end
     local value = { x = unpack(3) * scale, y = unpack(18) * scale, z = unpack(33) * scale }
-    r:add(tree, name, path, start, string.format("(%.5g, %.5g, %.5g)", value.x, value.y, value.z))
+    r:add(tree, name, path, start, "(" .. format_float(value.x, 5) .. ", " .. format_float(value.y, 5) .. ", " .. format_float(value.z, 5) .. ")")
     return value
 end
 
@@ -718,7 +723,7 @@ local function nbt_payload(r, tag, name, tree, path)
         local range = r.tvb(start, size)
         local text
         if tag == 5 or tag == 6 then
-            text = string.format("%.7g", range:float())
+            text = format_float(range:float(), 7)
         elseif tag == 4 then
             text = tostring(range:int64())
         else
